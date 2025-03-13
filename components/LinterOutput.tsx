@@ -15,7 +15,7 @@ export default function LinterOutput() {
           ))}
         </ul>
       ) : (
-        <p className="text-green-600">No errors found!</p>
+        <p className="text-green-600">No linting issues found!</p>
       )}
     </div>
   );

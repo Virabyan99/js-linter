@@ -4,7 +4,7 @@ import { useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import * as acorn from "acorn";
-import { traverseAST } from "@/utils/traverseAST";
+import { lintAST } from "@/utils/linter";
 import { useLinterStore } from "@/store/useLinterStore";
 
 export default function CodeEditor() {
@@ -17,15 +17,11 @@ export default function CodeEditor() {
       // Parse JavaScript into AST
       const ast = acorn.parse(value, { ecmaVersion: 2020 });
 
-      // Traverse AST and log structure
-      console.clear();
-      console.log("AST Traversal:");
-      traverseAST(ast);
-
-      // Clear errors if parsing succeeds
-      setErrors([]);
+      // Apply linting rules
+      const lintErrors = lintAST(ast);
+      setErrors(lintErrors);
     } catch (error: any) {
-      setErrors([error.message]);
+      setErrors([`Syntax Error: ${error.message}`]);
     }
   };
 
