@@ -4,24 +4,62 @@ import { useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import * as acorn from "acorn";
-import { lintAST } from "@/utils/linter";
+import { lintAST, LintError } from "@/utils/linter";
 import { useLinterStore } from "@/store/useLinterStore";
+import { EditorView, Decoration, DecorationSet } from "@codemirror/view";
 
 export default function CodeEditor() {
   const [code, setCode] = useState("// Write JavaScript here...");
   const { setErrors } = useLinterStore();
+  const [decorations, setDecorations] = useState<DecorationSet>(Decoration.none);
 
   const handleCodeChange = (value: string) => {
     setCode(value);
     try {
-      // Parse JavaScript into AST
-      const ast = acorn.parse(value, { ecmaVersion: 2020 });
+      const ast = acorn.parse(value, { ecmaVersion: 2020, locations: true });
+      const lintErrors: LintError[] = lintAST(ast, value);
 
-      // Apply linting rules
-      const lintErrors = lintAST(ast);
-      setErrors(lintErrors);
+      const uniqueErrors = Array.from(
+        new Map(lintErrors.map((e) => [`${e.message}:${e.start}:${e.end}`, e])).values()
+      );
+      setErrors(uniqueErrors.map((error) => error.message));
+
+      const sortedErrors = uniqueErrors
+        .filter(error => typeof error.start === 'number' && typeof error.end === 'number' && error.start <= error.end && error.start >= 0)
+        .sort((a, b) => a.start - b.start);
+
+      const highlightDecorations = sortedErrors.map((error) => {
+        try {
+          let decorationClass = 'cm-error';
+          if (error.message.includes('Missing semicolon')) {
+            decorationClass = 'cm-missing-semicolon';
+          } else if (error.message.includes('Undeclared variable')) {
+            decorationClass = 'cm-undeclared-variable';
+          } else if (error.message.includes('Unused variable')) {
+            decorationClass = 'cm-unused-variable';
+          }
+          const mark = Decoration.mark({ class: decorationClass });
+          if (!mark || typeof mark.range !== 'function') {
+            console.error('Invalid decoration mark for:', error);
+            return null;
+          }
+          return mark.range(error.start, error.end);
+        } catch (decError) {
+          console.error('Error creating decoration for:', error, decError);
+          return null;
+        }
+      }).filter(dec => dec !== null);
+
+      console.log('Decorations:', highlightDecorations.map(dec => ({ from: dec.from, to: dec.to, class: dec.value.spec.class })));
+      try {
+        setDecorations(Decoration.set(highlightDecorations));
+      } catch (setError) {
+        console.error('Error setting decorations:', setError);
+        setDecorations(Decoration.none);
+      }
     } catch (error: any) {
       setErrors([`Syntax Error: ${error.message}`]);
+      setDecorations(Decoration.none);
     }
   };
 
@@ -31,7 +69,7 @@ export default function CodeEditor() {
       <CodeMirror
         value={code}
         height="300px"
-        extensions={[javascript()]}
+        extensions={[javascript(), EditorView.decorations.of(() => decorations)]}
         onChange={handleCodeChange}
         className="border rounded-lg"
       />
