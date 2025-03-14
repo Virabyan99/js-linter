@@ -1,5 +1,7 @@
 export interface LintError {
     message: string;
+    fix: string;
+    severity: 'warning' | 'error';
     start: number;
     end: number;
   }
@@ -33,6 +35,11 @@ export interface LintError {
     function traverse(node: any, parent: any = null) {
       if (!node || typeof node !== 'object') return;
   
+      // Declare function name in the current scope
+      if (node.type === 'FunctionDeclaration' && node.id) {
+        declareVariable(node.id.name, node.id.start, node.id.end);
+      }
+  
       if (
         node.type === 'FunctionDeclaration' ||
         node.type === 'FunctionExpression' ||
@@ -49,6 +56,7 @@ export interface LintError {
         }
       }
   
+      // Rule 1: Missing Semicolon
       if (node.type === 'ExpressionStatement' && parent?.type !== 'ForStatement') {
         const codeSnippet = code.substring(node.start, node.end);
         if (!codeSnippet.trim().endsWith(';')) {
@@ -56,6 +64,8 @@ export interface LintError {
           if (lastCharPos >= 0) {
             errors.push({
               message: 'Missing semicolon.',
+              fix: 'Add a semicolon at the end of the statement.',
+              severity: 'warning',
               start: lastCharPos,
               end: node.end,
             });
@@ -63,6 +73,7 @@ export interface LintError {
         }
       }
   
+      // Rule 2: Undeclared Variables
       if (
         node.type === 'Identifier' &&
         parent?.type !== 'VariableDeclarator' &&
@@ -72,12 +83,15 @@ export interface LintError {
         if (!isVariableDeclared(node.name)) {
           errors.push({
             message: `Undeclared variable: '${node.name}'`,
+            fix: 'Declare this variable using `let`, `const`, or `var`.',
+            severity: 'error',
             start: node.start,
             end: node.end,
           });
         }
       }
   
+      // Rule 3: Variable Declaration for Unused Variables Check
       if (node.type === 'VariableDeclarator') {
         const varName = node.id.name;
         declareVariable(varName, node.id.start, node.id.end);
@@ -123,10 +137,13 @@ export interface LintError {
     }
     collectUsedVariables(ast, null);
   
+    // Rule 3: Unused Variables
     variablePositions.forEach((pos, varName) => {
       if (!usedVariables.has(varName) && !globalVariables.has(varName)) {
         errors.push({
           message: `Unused variable: '${varName}'`,
+          fix: 'Remove this variable if it’s not needed.',
+          severity: 'warning',
           start: pos.start,
           end: pos.end,
         });

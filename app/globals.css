@@ -79,6 +79,13 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
 }
 
+.cm-error,
+.cm-missing-semicolon,
+.cm-undeclared-variable,
+.cm-unused-variable {
+  cursor: pointer; /* New: Indicates the area is hoverable */
+}
+
 .cm-error {
   text-decoration: underline;
 }
@@ -95,7 +102,6 @@
 .cm-unused-variable {
   text-decoration: underline dashed yellow; /* Yellow dashed underline */
 }
-
 .dark {
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
