@@ -1,32 +1,33 @@
 'use client'
 
-import { useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { javascript } from '@codemirror/lang-javascript'
-import * as acorn from 'acorn'
-import { lintAST, LintError } from '@/utils/linter'
-import { useLinterStore } from '@/store/useLinterStore'
-import { EditorView, Decoration, DecorationSet } from '@codemirror/view'
-import { Tooltip as ReactTooltip } from 'react-tooltip'
+import { useState, useRef } from 'react';
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import * as acorn from 'acorn';
+import { lintAndFixAST, LintError } from '@/utils/linter';
+import { useLinterStore } from '@/store/useLinterStore';
+import { EditorView, Decoration, DecorationSet } from '@codemirror/view';
+import { Tooltip as ReactTooltip } from 'react-tooltip';
 
 export default function CodeEditor() {
-  const [code, setCode] = useState('// Write JavaScript here...')
-  const { setErrors } = useLinterStore()
-  const [decorations, setDecorations] = useState<DecorationSet>(Decoration.none)
+  const [code, setCode] = useState('// Write JavaScript here...');
+  const { setErrors } = useLinterStore();
+  const [decorations, setDecorations] = useState<DecorationSet>(Decoration.none);
+  const editorRef = useRef<EditorView | null>(null);
 
   const handleCodeChange = (value: string) => {
     setCode(value);
     try {
       const ast = acorn.parse(value, { ecmaVersion: 2020, locations: true });
-      const lintErrors: LintError[] = lintAST(ast, value);
-  
+      const { errors } = lintAndFixAST(ast, value);
+
       const uniqueErrors = Array.from(
         new Map(
-          lintErrors.map((e) => [`${e.message}:${e.start}:${e.end}`, e])
+          errors.map((e) => [`${e.message}:${e.start}:${e.end}`, e])
         ).values()
       );
       setErrors(uniqueErrors.map((error) => error.message));
-  
+
       const sortedErrors = uniqueErrors
         .filter(
           (error) =>
@@ -36,7 +37,7 @@ export default function CodeEditor() {
             error.start >= 0
         )
         .sort((a, b) => a.start - b.start);
-  
+
       const highlightDecorations = sortedErrors
         .map((error) => {
           try {
@@ -66,19 +67,27 @@ export default function CodeEditor() {
           }
         })
         .filter((dec) => dec !== null);
-  
-      console.log(
-        'Decorations:',
-        highlightDecorations.map((dec) => ({
-          from: dec.from,
-          to: dec.to,
-          class: dec.value.spec.class,
-        }))
-      );
+
       setDecorations(Decoration.set(highlightDecorations));
     } catch (error: any) {
       setErrors([`Syntax Error: ${error.message}`]);
       setDecorations(Decoration.none);
+    }
+  };
+
+  const handleFixCode = () => {
+    try {
+      const ast = acorn.parse(code, { ecmaVersion: 2020, locations: true });
+      const { fixedCode } = lintAndFixAST(ast, code);
+      if (editorRef.current) {
+        const transaction = editorRef.current.state.update({
+          changes: { from: 0, to: editorRef.current.state.doc.length, insert: fixedCode },
+        });
+        editorRef.current.dispatch(transaction);
+      }
+      setCode(fixedCode);
+    } catch (error: any) {
+      setErrors([`Fixing Error: ${error.message}`]);
     }
   };
 
@@ -93,9 +102,17 @@ export default function CodeEditor() {
           EditorView.decorations.of(() => decorations),
         ]}
         onChange={handleCodeChange}
+        onCreateEditor={(view) => {
+          editorRef.current = view;
+        }}
         className="border rounded-lg"
       />
-      {/* New: Render React-Tooltip to display error messages and fixes */}
+      <button
+        onClick={handleFixCode}
+        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg"
+      >
+        Fix Issues
+      </button>
       <ReactTooltip
         id="error-tooltip"
         place="top"
@@ -106,5 +123,5 @@ export default function CodeEditor() {
         )}
       />
     </div>
-  )
+  );
 }
