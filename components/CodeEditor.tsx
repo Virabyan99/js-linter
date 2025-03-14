@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import * as acorn from 'acorn';
-import { lintAndFixAST, LintError } from '@/utils/linter';
+import { lintAndFixAST } from '@/utils/linter';
 import { useLinterStore } from '@/store/useLinterStore';
 import { useLintingHistoryStore } from '@/store/useLintingHistoryStore';
 import { EditorView, Decoration, DecorationSet } from '@codemirror/view';
