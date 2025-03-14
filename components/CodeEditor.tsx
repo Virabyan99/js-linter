@@ -1,22 +1,41 @@
 'use client'
 
-import { useState, useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import * as acorn from 'acorn';
 import { lintAndFixAST, LintError } from '@/utils/linter';
 import { useLinterStore } from '@/store/useLinterStore';
+import { useLintingHistoryStore } from '@/store/useLintingHistoryStore';
 import { EditorView, Decoration, DecorationSet } from '@codemirror/view';
 import { Tooltip as ReactTooltip } from 'react-tooltip';
+import { debounce } from 'lodash';
 
-export default function CodeEditor() {
-  const [code, setCode] = useState('// Write JavaScript here...');
+export default function CodeEditor({
+  code,
+  onCodeChange,
+}: {
+  code: string;
+  onCodeChange: (value: string) => void;
+}) {
   const { setErrors } = useLinterStore();
+  const { saveHistory } = useLintingHistoryStore();
   const [decorations, setDecorations] = useState<DecorationSet>(Decoration.none);
   const editorRef = useRef<EditorView | null>(null);
+  const [previousErrors, setPreviousErrors] = useState<string[]>([]);
+
+  // Debounced function to save linting history
+  const debouncedSaveHistory = debounce((currentCode: string, currentErrors: string[]) => {
+    const currentErrorStr = JSON.stringify(currentErrors);
+    const prevErrorStr = JSON.stringify(previousErrors);
+    if (currentErrorStr !== prevErrorStr) {
+      saveHistory(currentCode, currentErrors);
+      setPreviousErrors(currentErrors);
+    }
+  }, 2000); // 2-second debounce delay
 
   const handleCodeChange = (value: string) => {
-    setCode(value);
+    onCodeChange(value);
     try {
       const ast = acorn.parse(value, { ecmaVersion: 2020, locations: true });
       const { errors } = lintAndFixAST(ast, value);
@@ -26,7 +45,11 @@ export default function CodeEditor() {
           errors.map((e) => [`${e.message}:${e.start}:${e.end}`, e])
         ).values()
       );
-      setErrors(uniqueErrors.map((error) => error.message));
+      const errorMessages = uniqueErrors.map((error) => error.message);
+      setErrors(errorMessages);
+
+      // Trigger debounced save history
+      debouncedSaveHistory(value, errorMessages);
 
       const sortedErrors = uniqueErrors
         .filter(
@@ -85,7 +108,7 @@ export default function CodeEditor() {
         });
         editorRef.current.dispatch(transaction);
       }
-      setCode(fixedCode);
+      onCodeChange(fixedCode);
     } catch (error: any) {
       setErrors([`Fixing Error: ${error.message}`]);
     }
